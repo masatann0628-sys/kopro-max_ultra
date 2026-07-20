@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kopro max ― 匿名HTML投稿掲示板</title>
+<style>
+:root{
+  --ink:#1b2233;
+  --ink-elevated:#242c40;
+  --ink-line:#3a4257;
+  --paper:#f5efdc;
+  --paper-edge:#e2d6b4;
+  --stamp:#c93a25;
+  --stamp-press:#9c2c1a;
+  --cream:#ece6d3;
+  --cream-soft:#a49e8a;
+  --ink-text:#2c2618;
+  --ink-text-soft:#7c7258;
+  --success:#6f9c6a;
+  --danger-bg:rgba(201,58,37,.12);
+  --font-sans:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic","Segoe UI",Meiryo,sans-serif;
+  --font-mono:"SF Mono",SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--ink);
+  color:var(--cream);
+  font-family:var(--font-sans);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,textarea{font-family:inherit;}
+h1,h2,h3,p{margin:0;}
+:focus-visible{outline:2px solid var(--stamp);outline-offset:2px;}
+
+/* loading */
+.loading-overlay{
+  position:fixed;inset:0;background:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  z-index:1000;opacity:1;visibility:visible;
+  transition:opacity .3s ease, visibility .3s ease;
+}
+.loading-overlay.hide{opacity:0;visibility:hidden;pointer-events:none;}
+.loading-text{color:var(--cream-soft);font-size:13px;font-family:var(--font-mono);}
+.spinner{
+  width:32px;height:32px;border:3px solid var(--ink-line);border-top-color:var(--stamp);
+  border-radius:50%;animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* header */
+.site-header{background:var(--ink-elevated);border-bottom:1px solid var(--ink-line);}
+.header-inner{max-width:1160px;margin:0 auto;padding:20px 24px;}
+.header-row{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+.wordmark{display:flex;flex-direction:column;gap:2px;}
+.logo-line{display:flex;align-items:baseline;}
+.logo-kopro,.logo-max{font-size:28px;font-weight:900;letter-spacing:-.5px;}
+.logo-kopro{color:var(--cream);}
+.logo-max{color:var(--stamp);}
+.tagline{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;color:var(--cream-soft);}
+.identity{display:flex;align-items:center;gap:8px;background:var(--ink);border:1px solid var(--ink-line);border-radius:999px;padding:5px 12px 5px 5px;}
+.identity-name{font-family:var(--font-mono);font-size:12.5px;font-weight:600;color:var(--cream);}
+.identity-refresh{background:transparent;border:none;color:var(--cream-soft);cursor:pointer;padding:4px;display:flex;border-radius:6px;transition:color .15s, transform .4s;}
+.identity-refresh:hover{color:var(--cream);transform:rotate(180deg);}
+
+.notice-bar{
+  margin-top:14px;display:flex;align-items:center;gap:10px;
+  background:var(--ink);border:1px solid var(--ink-line);border-radius:8px;
+  padding:9px 14px;font-size:12px;color:var(--cream-soft);line-height:1.5;
+}
+.notice-mark{
+  flex-shrink:0;width:16px;height:16px;border-radius:50%;background:var(--stamp);color:var(--cream);
+  font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;
+}
+
+/* stamp badge (hanko motif) */
+.stamp{
+  flex-shrink:0;width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+}
+.stamp--lg{width:30px;height:30px;font-size:13px;}
+.stamp--mine{background:var(--stamp);color:var(--cream);box-shadow:inset 0 0 0 2px rgba(255,255,255,.2);}
+.stamp--other{background:transparent;color:var(--ink-text-soft);border:1.5px solid var(--paper-edge);}
+
+/* main / toolbar */
+.board{max-width:1160px;margin:0 auto;padding:24px 24px 64px;}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.search-field{position:relative;flex:1;min-width:180px;}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--cream-soft);pointer-events:none;}
+.search-field input{
+  width:100%;background:var(--ink-elevated);border:1px solid var(--ink-line);border-radius:8px;
+  padding:10px 14px 10px 34px;color:var(--cream);font-size:13.5px;
+}
+.search-field input::placeholder{color:var(--cream-soft);}
+.search-field input:focus{outline:none;border-color:var(--stamp);}
+
+.tabs{display:flex;gap:2px;background:var(--ink-elevated);border:1px solid var(--ink-line);border-radius:8px;padding:3px;}
+.tab-btn{
+  border:none;background:transparent;color:var(--cream-soft);padding:7px 14px;border-radius:6px;
+  font-size:13px;font-weight:700;cursor:pointer;transition:background .15s, color .15s;
+}
+.tab-btn.active{background:var(--stamp);color:var(--cream);}
+.tab-btn:not(.active):hover{color:var(--cream);}
+
+.btn{
+  border:none;border-radius:7px;padding:10px 16px;font-size:13.5px;font-weight:700;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;transition:transform .12s ease, box-shadow .12s ease;
+}
+.btn-primary{background:var(--stamp);color:var(--cream);box-shadow:0 2px 0 var(--stamp-press);}
+.btn-primary:hover{transform:translateY(-1px);}
+.btn-primary:active{transform:translateY(2px);box-shadow:0 0 0 var(--stamp-press);}
+.btn-ghost{background:transparent;border:1px solid var(--ink-line);color:var(--cream);}
+.btn-ghost:hover{border-color:var(--cream-soft);}
+.btn-danger{background:transparent;border:1px solid var(--stamp);color:var(--stamp);}
+.btn-danger:hover{background:var(--danger-bg);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none;}
+
+.stats-line{margin-top:18px;font-family:var(--font-mono);font-size:12px;color:var(--cream-soft);}
+
+/* ticket grid */
+.ticket-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px;margin-top:16px;}
+.ticket{
+  background:var(--paper);border-radius:9px;box-shadow:0 3px 10px rgba(0,0,0,.28);
+  transition:transform .18s ease, box-shadow .18s ease;animation:settle .3s ease;
+}
+.ticket:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(0,0,0,.32);}
+.ticket--mine{box-shadow:0 0 0 1.5px rgba(201,58,37,.45), 0 3px 10px rgba(0,0,0,.28);}
+.ticket--mine:hover{box-shadow:0 0 0 1.5px rgba(201,58,37,.5), 0 8px 18px rgba(0,0,0,.32);}
+@keyframes settle{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
+
+.ticket-stub{
+  position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:10px 14px;border-bottom:1px dashed var(--paper-edge);border-radius:9px 9px 0 0;
+}
+.ticket-stub::before,.ticket-stub::after{
+  content:'';position:absolute;bottom:-8px;width:16px;height:16px;border-radius:50%;background:var(--ink);
+}
+.ticket-stub::before{left:-8px;}
+.ticket-stub::after{right:-8px;}
+.ticket-author{display:flex;align-items:center;gap:6px;min-width:0;}
+.ticket-author-name{
+  font-family:var(--font-mono);font-size:11px;color:var(--ink-text-soft);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;
+}
+.ticket-time{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-text-soft);flex-shrink:0;}
+
+.ticket-body{padding:13px 14px 14px;border-radius:0 0 9px 9px;}
+.ticket-title{font-size:15.5px;font-weight:700;color:var(--ink-text);word-break:break-word;margin-bottom:8px;}
+.ticket-snippet{
+  font-family:var(--font-mono);font-size:11px;color:var(--ink-text-soft);background:rgba(0,0,0,.04);
+  padding:8px 10px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:12px;
+}
+.ticket-actions{display:flex;gap:8px;}
+
+/* empty state */
+.empty-state{display:none;flex-direction:column;align-items:center;justify-content:center;padding:90px 20px;text-align:center;}
+.empty-title{font-size:16px;font-weight:700;color:var(--cream);}
+.empty-sub{margin-top:6px;font-size:13px;color:var(--cream-soft);}
+
+/* modal */
+.modal-backdrop{
+  position:fixed;inset:0;background:rgba(10,13,20,.65);display:flex;align-items:center;justify-content:center;
+  padding:20px;opacity:0;visibility:hidden;transition:opacity .2s ease, visibility .2s ease;z-index:500;
+}
+.modal-backdrop.show{opacity:1;visibility:visible;}
+.modal{
+  background:var(--ink-elevated);border:1px solid var(--ink-line);border-radius:12px;
+  width:100%;max-width:640px;max-height:86vh;display:flex;flex-direction:column;
+  transform:scale(.96) translateY(8px);transition:transform .2s ease;
+  box-shadow:0 24px 60px rgba(0,0,0,.5);overflow:hidden;
+}
+.modal-backdrop.show .modal{transform:scale(1) translateY(0);}
+.modal-wide{max-width:900px;}
+.modal-small{max-width:380px;}
+
+.modal-header{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  padding:18px 20px;border-bottom:1px solid var(--ink-line);flex-shrink:0;
+}
+.modal-header h2{font-size:17px;font-weight:800;color:var(--cream);}
+.modal-title-group{min-width:0;}
+.modal-title-group h2{word-break:break-word;}
+.view-meta{margin-top:4px;font-family:var(--font-mono);font-size:11.5px;color:var(--cream-soft);}
+.modal-close{background:transparent;border:none;color:var(--cream-soft);font-size:22px;line-height:1;cursor:pointer;padding:2px 6px;flex-shrink:0;}
+.modal-close:hover{color:var(--cream);}
+
+.modal-body{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;min-height:0;}
+.modal-footer{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--ink-line);flex-shrink:0;}
+
+.field-label{display:block;font-size:11.5px;font-weight:700;color:var(--cream-soft);margin-bottom:6px;font-family:var(--font-mono);letter-spacing:.03em;}
+.text-input{
+  width:100%;background:var(--ink);border:1px solid var(--ink-line);border-radius:7px;
+  padding:10px 12px;color:var(--cream);font-size:14px;margin-bottom:16px;
+}
+.text-input:focus{outline:none;border-color:var(--stamp);}
+
+.split{display:flex;gap:14px;flex:1;min-height:280px;}
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;position:relative;}
+.code-textarea{
+  flex:1;min-height:240px;resize:vertical;background:var(--ink);color:var(--cream);
+  border:1px solid var(--ink-line);border-radius:8px;padding:12px;font-family:var(--font-mono);
+  font-size:12.5px;line-height:1.6;tab-size:2;
+}
+.code-textarea:focus{outline:none;border-color:var(--stamp);}
+.char-counter{margin-top:6px;text-align:right;font-family:var(--font-mono);font-size:10.5px;color:var(--cream-soft);}
+.char-counter.over-limit{color:var(--stamp);}
+.preview-frame{flex:1;min-height:240px;width:100%;border:1px solid var(--ink-line);border-radius:8px;background:#fff;}
+.preview-frame.tall{min-height:380px;}
+
+.view-tabs{display:flex;gap:2px;padding:0 20px;border-bottom:1px solid var(--ink-line);flex-shrink:0;}
+.view-tab-btn{
+  background:transparent;border:none;color:var(--cream-soft);padding:10px 14px;font-size:12.5px;
+  font-weight:700;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.view-tab-btn.active{color:var(--cream);border-bottom-color:var(--stamp);}
+.view-body{padding:18px 20px;}
+.code-block{
+  margin:0;background:var(--ink);border:1px solid var(--ink-line);border-radius:8px;padding:14px;
+  font-family:var(--font-mono);font-size:12px;line-height:1.6;color:var(--cream);
+  white-space:pre-wrap;word-break:break-word;max-height:380px;overflow:auto;
+}
+
+/* toast */
+.toast-stack{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:8px;z-index:2000;max-width:calc(100vw - 44px);}
+.toast{
+  background:var(--ink-elevated);border:1px solid var(--ink-line);border-left:3px solid var(--stamp);
+  padding:11px 16px;border-radius:8px;color:var(--cream);font-size:13px;box-shadow:0 10px 26px rgba(0,0,0,.4);
+  opacity:0;transform:translateX(16px);transition:opacity .25s ease, transform .25s ease;max-width:320px;
+}
+.toast.show{opacity:1;transform:translateX(0);}
+.toast--success{border-left-color:var(--success);}
+.toast--error{border-left-color:var(--stamp);}
+
+@media (max-width:700px){
+  .split{flex-direction:column;}
+  .header-inner{padding:18px 16px;}
+  .board{padding:20px 16px 48px;}
+  .logo-kopro,.logo-max{font-size:24px;}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;}
+}
+</style>
+</head>
+<body>
+
+<div id="loading-overlay" class="loading-overlay">
+  <div class="spinner"></div>
+  <p class="loading-text">読み込み中…</p>
+</div>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="header-row">
+      <div class="wordmark">
+        <div class="logo-line"><span class="logo-kopro">kopro</span><span class="logo-max">max</span></div>
+        <span class="tagline">匿名HTML投稿掲示板</span>
+      </div>
+      <div class="identity" id="identity"></div>
+    </div>
+    <div class="notice-bar">
+      <span class="notice-mark">!</span>
+      <span>投稿した内容はこの掲示板を開いた全員に公開されます。個人情報は書き込まないでください。</span>
+    </div>
+  </div>
+</header>
+
+<main class="board">
+  <div class="toolbar">
+    <div class="search-field">
+      <svg class="search-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M11 11l4 4"/></svg>
+      <input type="text" id="search-input" placeholder="タイトルで検索">
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="all">すべて</button>
+      <button class="tab-btn" data-tab="mine">自分の投稿</button>
+    </div>
+    <button id="new-post-btn" class="btn btn-primary">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v12M2 8h12"/></svg>
+      新規投稿
+    </button>
+  </div>
+
+  <div class="stats-line" id="stats-line"></div>
+
+  <div class="ticket-grid" id="gallery"></div>
+
+  <div class="empty-state" id="empty-state">
+    <p class="empty-title" id="empty-title"></p>
+    <p class="empty-sub" id="empty-sub"></p>
+  </div>
+</main>
+
+<!-- New Post Modal -->
+<div class="modal-backdrop" id="new-post-backdrop">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>新規投稿</h2>
+      <button class="modal-close" data-close="new-post" aria-label="閉じる">×</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label" for="post-title-input">タイトル</label>
+      <input type="text" id="post-title-input" class="text-input" placeholder="例：光るボタン" maxlength="100">
+
+      <label class="field-label">HTMLコード</label>
+      <div class="split">
+        <div class="pane">
+          <textarea id="post-code-input" class="code-textarea" spellcheck="false"></textarea>
+          <div class="char-counter" id="char-counter">0 / 50,000</div>
+        </div>
+        <div class="pane">
+          <iframe id="new-post-preview" class="preview-frame" sandbox="allow-scripts" title="プレビュー"></iframe>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close="new-post">キャンセル</button>
+      <button class="btn btn-primary" id="submit-post-btn">投稿する</button>
+    </div>
+  </div>
+</div>
+
+<!-- View Modal -->
+<div class="modal-backdrop" id="view-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title-group">
+        <h2 id="view-title"></h2>
+        <div class="view-meta" id="view-meta"></div>
+      </div>
+      <button class="modal-close" data-close="view" aria-label="閉じる">×</button>
+    </div>
+    <div class="view-tabs">
+      <button class="view-tab-btn active" data-view-tab="preview">プレビュー</button>
+      <button class="view-tab-btn" data-view-tab="code">コード</button>
+    </div>
+    <div class="modal-body view-body">
+      <iframe id="view-preview-iframe" class="preview-frame tall" sandbox="allow-scripts" title="プレビュー"></iframe>
+      <pre class="code-block" id="view-code" style="display:none;"><code id="view-code-content"></code></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="copy-code-btn">コードをコピー</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-backdrop" id="confirm-backdrop">
+  <div class="modal modal-small">
+    <div class="modal-body">
+      <p id="confirm-message"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="confirm-cancel-btn">キャンセル</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">削除する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-container"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ---------- state ----------
+  let myIdentity=null;
+  let allPosts=[];
+  let activeTab='all';
+  let searchQuery='';
+  let pendingDeleteId=null;
+  let currentViewPost=null;
+  let previewDebounceTimer=null;
+  const MAX_CODE_LENGTH=50000;
+
+  const ADJECTIVES=['しずかな','げんきな','ふしぎな','あやしい','てきぱきした','のんびりした','きらきらした','どきどきする','ひみつの','よあけの','てんさいの','ねむたい','うきうきした','ぴかぴかの','おっとりした','なぞの','ひかえめな','やんちゃな','おだやかな','こっそりの'];
+  const NOUNS=['キツネ','パンダ','ネコ','タヌキ','ペンギン','ハムスター','フクロウ','カピバラ','ウサギ','イヌ','コアラ','リス','カメ','イルカ','ラッコ','ハリネズミ','クマ','ヒツジ','アライグマ','フラミンゴ'];
+
+  const STARTER_CODE=[
+    '<!DOCTYPE html>',
+    '<html>',
+    '<head>',
+    '<style>',
+    '  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;background:linear-gradient(135deg,#2c3654,#c93a25);color:#fff;}',
+    '  .card{text-align:center;}',
+    '  h1{font-size:2.2rem;margin:0 0 8px;}',
+    '</style>',
+    '</head>',
+    '<body>',
+    '  <div class="card">',
+    '    <h1>こんにちは</h1>',
+    '    <p>ここに好きなHTMLを書いてね</p>',
+    '  </div>',
+    '</body>',
+    '</html>'
+  ].join('\n');
+
+  // ---------- utilities ----------
+  function escapeHtml(str){
+    const div=document.createElement('div');
+    div.textContent = str==null ? '' : String(str);
+    return div.innerHTML;
+  }
+
+  function generateId(prefix){
+    return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,9);
+  }
+
+  function generateAnonName(){
+    const a=ADJECTIVES[Math.floor(Math.random()*ADJECTIVES.length)];
+    const n=NOUNS[Math.floor(Math.random()*NOUNS.length)];
+    const num=Math.floor(1000+Math.random()*9000);
+    return a+n+'#'+num;
+  }
+
+  function formatRelativeTime(ts){
+    const diff=Date.now()-ts;
+    const sec=Math.floor(diff/1000);
+    if(sec<60) return 'たった今';
+    const min=Math.floor(sec/60);
+    if(min<60) return min+'分前';
+    const hour=Math.floor(min/60);
+    if(hour<24) return hour+'時間前';
+    const day=Math.floor(hour/24);
+    if(day<30) return day+'日前';
+    const d=new Date(ts);
+    return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate();
+  }
+
+  function showToast(message, type){
+    const container=document.getElementById('toast-container');
+    const toast=document.createElement('div');
+    toast.className='toast toast--'+(type||'info');
+    toast.textContent=message;
+    container.appendChild(toast);
+    requestAnimationFrame(()=>toast.classList.add('show'));
+    setTimeout(()=>{
+      toast.classList.remove('show');
+      setTimeout(()=>toast.remove(),300);
+    },3000);
+  }
+
+  // ---------- storage (APIに変更) ----------
+  async function loadIdentity(){
+    const saved = localStorage.getItem('kopro_id');
+    if(saved) {
+      try {
+        myIdentity = JSON.parse(saved);
+        if(myIdentity && myIdentity.id && myIdentity.name) return;
+      } catch(e){}
+    }
+    myIdentity = { id: generateId('u'), name: generateAnonName() };
+    localStorage.setItem('kopro_id', JSON.stringify(myIdentity));
+  }
+
+  async function loadPosts(){
+    try {
+      const res = await fetch('/api/posts');
+      if(res.ok) {
+        const parsed = await res.json();
+        allPosts = Array.isArray(parsed) ? parsed : [];
+        return;
+      }
+    } catch (e) {
+      console.error('読み込み失敗:', e);
+    }
+    allPosts = [];
+  }
+
+  async function savePosts(){
+    try {
+      await fetch('/api/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(allPosts)
+      });
+    } catch (e) {
+      console.error('保存失敗:', e);
+    }
+  }
+
+  // ---------- actions ----------
+  async function submitPost(title, code){
+    const submitBtn=document.getElementById('submit-post-btn');
+    submitBtn.disabled=true;
+    submitBtn.textContent='投稿中…';
+    try{
+      await loadPosts();
+      const newPost={
+        id:generateId('p'),
+        title:title.trim(),
+        html:code,
+        authorId:myIdentity.id,
+        authorName:myIdentity.name,
+        createdAt:Date.now()
+      };
+      allPosts.push(newPost);
+      await savePosts();
+      closeModal('new-post');
+      render();
+      showToast('投稿しました','success');
+    }catch(e){
+      console.error(e);
+      showToast('投稿に失敗しました。もう一度お試しください。','error');
+    }finally{
+      submitBtn.disabled=false;
+      submitBtn.textContent='投稿する';
+    }
+  }
+
+  async function deletePost(id){
+    try{
+      await loadPosts();
+      allPosts=allPosts.filter(p=>!(p.id===id && p.authorId===myIdentity.id));
+      await savePosts();
+      render();
+      showToast('削除しました','success');
+    }catch(e){
+      console.error(e);
+      showToast('削除に失敗しました','error');
+    }
+  }
+
+  async function regenerateName(){
+    myIdentity.name=generateAnonName();
+    try{
+      localStorage.setItem('kopro_id', JSON.stringify(myIdentity));
+      renderIdentity();
+      showToast('新しい名前になりました：'+myIdentity.name,'success');
+    }catch(e){
+      showToast('名前の変更に失敗しました','error');
+    }
+  }
+
+  // ---------- rendering ----------
+  function renderIdentity(){
+    const box=document.getElementById('identity');
+    box.innerHTML =
+      '<span class="stamp stamp--mine stamp--lg">印</span>'+
+      '<span class="identity-name">'+escapeHtml(myIdentity.name)+'</span>'+
+      '<button class="identity-refresh" id="regenerate-name-btn" aria-label="名前を変える" title="名前を変える">'+
+      '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3.5H10"/></svg>'+
+      '</button>';
+    document.getElementById('regenerate-name-btn').addEventListener('click', regenerateName);
+  }
+
+  function getFilteredPosts(){
+    return allPosts
+      .filter(p=> activeTab==='mine' ? p.authorId===myIdentity.id : true)
+      .filter(p=> searchQuery ? p.title.toLowerCase().includes(searchQuery.toLowerCase()) : true)
+      .sort((a,b)=>b.createdAt-a.createdAt);
+  }
+
+  function render(){
+    renderIdentity();
+    renderStats();
+    renderGallery();
+  }
+
+  function renderStats(){
+    const el=document.getElementById('stats-line');
+    const uniqueAuthors=new Set(allPosts.map(p=>p.authorId)).size;
+    el.textContent='全 '+allPosts.length+' 件の投稿 ・ '+uniqueAuthors+' 人が参加中';
+  }
+
+  function renderGallery(){
+    const gallery=document.getElementById('gallery');
+    const emptyState=document.getElementById('empty-state');
+    const filtered=getFilteredPosts();
+
+    if(filtered.length===0){
+      gallery.innerHTML='';
+      gallery.style.display='none';
+      emptyState.style.display='flex';
+      const titleEl=document.getElementById('empty-title');
+      const subEl=document.getElementById('empty-sub');
+      if(searchQuery){
+        titleEl.textContent='「'+searchQuery+'」に一致する投稿はありません';
+        subEl.textContent='別のキーワードで探してみてください';
+      }else if(activeTab==='mine'){
+        titleEl.textContent='まだ投稿していません';
+        subEl.textContent='＋ 新規投稿から書いてみよう';
+      }else{
+        titleEl.textContent='掲示板はまだ空っぽ';
+        subEl.textContent='最初の一枚を貼ってみよう';
+      }
+      return;
+    }
+    gallery.style.display='grid';
+    emptyState.style.display='none';
+
+    gallery.innerHTML = filtered.map(post=>{
+      const isMine = post.authorId===myIdentity.id;
+      const snippet = post.html.replace(/\s+/g,' ').trim().slice(0,90);
+      const stampClass = isMine ? 'stamp--mine' : 'stamp--other';
+      return (
+        '<div class="ticket'+(isMine?' ticket--mine':'')+'">'+
+          '<div class="ticket-stub">'+
+            '<div class="ticket-author">'+
+              '<span class="stamp '+stampClass+'">印</span>'+
+              '<span class="ticket-author-name">'+escapeHtml(post.authorName)+'</span>'+
+            '</div>'+
+            '<span class="ticket-time">'+formatRelativeTime(post.createdAt)+'</span>'+
+          '</div>'+
+          '<div class="ticket-body">'+
+            '<h3 class="ticket-title">'+escapeHtml(post.title)+'</h3>'+
+            '<div class="ticket-snippet">'+escapeHtml(snippet)+(post.html.length>90?'…':'')+'</div>'+
+            '<div class="ticket-actions">'+
+              '<button class="btn btn-sm btn-primary view-btn" data-post-id="'+post.id+'">表示</button>'+
+              (isMine?'<button class="btn btn-sm btn-danger delete-btn" data-post-id="'+post.id+'">削除</button>':'')+
+            '</div>'+
+          '</div>'+
+        '</div>'
+      );
+    }).join('');
+  }
+
+  // ---------- modal helpers ----------
+  function openModal(name){ document.getElementById(name+'-backdrop').classList.add('show'); }
+  function closeModal(name){ document.getElementById(name+'-backdrop').classList.remove('show'); }
+
+  // ---------- view modal ----------
+  function openViewModal(post){
+    currentViewPost=post;
+    document.getElementById('view-title').textContent=post.title;
+    document.getElementById('view-meta').textContent=post.authorName+'  ・  '+formatRelativeTime(post.createdAt);
+    document.getElementById('view-preview-iframe').srcdoc=post.html;
+    document.getElementById('view-code-content').textContent=post.html;
+    switchViewTab('preview');
+    openModal('view');
+  }
+
+  function switchViewTab(tab){
+    document.querySelectorAll('.view-tab-btn').forEach(btn=>{
+      btn.classList.toggle('active', btn.dataset.viewTab===tab);
+    });
+    document.getElementById('view-preview-iframe').style.display = tab==='preview' ? 'block' : 'none';
+    document.getElementById('view-code').style.display = tab==='code' ? 'block' : 'none';
+  }
+
+  // ---------- new post modal ----------
+  function openNewPostModal(){
+    document.getElementById('post-title-input').value='';
+    document.getElementById('post-code-input').value=STARTER_CODE;
+    updateCharCounter();
+    updateNewPostPreview();
+    openModal('new-post');
+    document.getElementById('post-title-input').focus();
+  }
+
+  function updateNewPostPreview(){
+    const code=document.getElementById('post-code-input').value;
+    document.getElementById('new-post-preview').srcdoc=code;
+  }
+
+  function updateCharCounter(){
+    const len=document.getElementById('post-code-input').value.length;
+    const el=document.getElementById('char-counter');
+    el.textContent=len.toLocaleString()+' / '+MAX_CODE_LENGTH.toLocaleString();
+    el.classList.toggle('over-limit', len>MAX_CODE_LENGTH);
+  }
+
+  // ---------- delete confirm ----------
+  function openDeleteConfirm(id){
+    pendingDeleteId=id;
+    const post=allPosts.find(p=>p.id===id);
+    document.getElementById('confirm-message').textContent =
+      (post ? ('「'+post.title+'」') : 'この投稿') + 'を削除しますか？この操作は取り消せません。';
+    openModal('confirm');
+  }
+
+  // ---------- events ----------
+  function bindEvents(){
+    document.getElementById('new-post-btn').addEventListener('click', openNewPostModal);
+
+    document.querySelectorAll('[data-close]').forEach(btn=>{
+      btn.addEventListener('click', ()=>closeModal(btn.dataset.close));
+    });
+
+    document.querySelectorAll('.modal-backdrop').forEach(backdrop=>{
+      backdrop.addEventListener('click', (e)=>{
+        if(e.target===backdrop) backdrop.classList.remove('show');
+      });
+    });
+
+    document.addEventListener('keydown', (e)=>{
+      if(e.key==='Escape'){
+        document.querySelectorAll('.modal-backdrop.show').forEach(b=>b.classList.remove('show'));
+      }
+    });
+
+    document.getElementById('search-input').addEventListener('input', (e)=>{
+      searchQuery=e.target.value;
+      renderGallery();
+    });
+
+    document.querySelectorAll('.tab-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        activeTab=btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===btn));
+        renderGallery();
+      });
+    });
+
+    document.getElementById('gallery').addEventListener('click', (e)=>{
+      const viewBtn=e.target.closest('.view-btn');
+      if(viewBtn){
+        const post=allPosts.find(p=>p.id===viewBtn.dataset.postId);
+        if(post) openViewModal(post);
+        return;
+      }
+      const delBtn=e.target.closest('.delete-btn');
+      if(delBtn){
+        openDeleteConfirm(delBtn.dataset.postId);
+        return;
+      }
+    });
+
+    document.getElementById('post-code-input').addEventListener('input', ()=>{
+      updateCharCounter();
+      clearTimeout(previewDebounceTimer);
+      previewDebounceTimer=setTimeout(updateNewPostPreview, 500);
+    });
+
+    document.getElementById('post-code-input').addEventListener('keydown', (e)=>{
+      if(e.key==='Tab'){
+        e.preventDefault();
+        const ta=e.target;
+        const start=ta.selectionStart, end=ta.selectionEnd;
+        ta.value=ta.value.slice(0,start)+'  '+ta.value.slice(end);
+        ta.selectionStart=ta.selectionEnd=start+2;
+      }
+    });
+
+    document.getElementById('submit-post-btn').addEventListener('click', ()=>{
+      const title=document.getElementById('post-title-input').value.trim();
+      const code=document.getElementById('post-code-input').value;
+      if(!title){
+        showToast('タイトルを入力してください','error');
+        document.getElementById('post-title-input').focus();
+        return;
+      }
+      if(!code.trim()){
+        showToast('HTMLコードを入力してください','error');
+        return;
+      }
+      if(code.length>MAX_CODE_LENGTH){
+        showToast('コードが長すぎます（最大'+MAX_CODE_LENGTH.toLocaleString()+'文字）','error');
+        return;
+      }
+      submitPost(title, code);
+    });
+
+    document.querySelectorAll('.view-tab-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>switchViewTab(btn.dataset.viewTab));
+    });
+
+    document.getElementById('copy-code-btn').addEventListener('click', async ()=>{
+      if(!currentViewPost) return;
+      try{
+        await navigator.clipboard.writeText(currentViewPost.html);
+        showToast('コードをコピーしました','success');
+      }catch(e){
+        try{
+          const ta=document.createElement('textarea');
+          ta.value=currentViewPost.html;
+          ta.style.position='fixed';
+          ta.style.opacity='0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('コードをコピーしました','success');
+        }catch(e2){
+          showToast('コピーに失敗しました','error');
+        }
+      }
+    });
+
+    document.getElementById('confirm-cancel-btn').addEventListener('click', ()=>{
+      closeModal('confirm');
+      pendingDeleteId=null;
+    });
+
+    document.getElementById('confirm-ok-btn').addEventListener('click', ()=>{
+      if(pendingDeleteId){ deletePost(pendingDeleteId); }
+      closeModal('confirm');
+      pendingDeleteId=null;
+    });
+  }
+
+  // ---------- init (APIに合わせた修正) ----------
+  async function init(){
+    bindEvents();
+    try{
+      await loadIdentity();
+      await loadPosts();
+    }catch(e){
+      console.error(e);
+    }
+    document.getElementById('loading-overlay').classList.add('hide');
+    render();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
