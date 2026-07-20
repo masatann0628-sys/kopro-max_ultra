@@ -4,8 +4,9 @@ const { Octokit } = require('@octokit/rest');
 const app = express();
 
 app.use(express.json());
+app.use(express.static('.')); // ← これが「index.htmlを表示する」ための魔法のコードだよ
 
-// 環境変数から設定を読み込む（RenderのSettings > Environment Variablesで設定してね）
+// 環境変数から設定を読み込む
 const OWNER = process.env.OWNER;
 const REPO = process.env.REPO;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
