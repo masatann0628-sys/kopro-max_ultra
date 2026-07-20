@@ -1,10 +1,18 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const { Octokit } = require('@octokit/rest');
 const app = express();
 
 app.use(express.json());
-app.use(express.static('.')); // ← これが「index.htmlを表示する」ための魔法のコードだよ
+
+// 静的ファイルを公開（CSSや画像などもこれで読み込める）
+app.use(express.static('.'));
+
+// 強制的に index.html を表示する設定
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // 環境変数から設定を読み込む
 const OWNER = process.env.OWNER;
@@ -36,7 +44,7 @@ app.post('/api/save', async (req, res) => {
         // 1. ローカルファイルを更新
         fs.writeFileSync(DATA_FILE, JSON.stringify(req.body, null, 2));
 
-        // 2. GitHubから現在のファイルのSHAを取得（ファイルがない場合は無視）
+        // 2. GitHubから現在のファイルのSHAを取得
         let fileSha = null;
         try {
             const { data: fileData } = await octokit.rest.repos.getContent({
@@ -46,12 +54,7 @@ app.post('/api/save', async (req, res) => {
             });
             fileSha = fileData.sha;
         } catch (error) {
-            // 404エラー（ファイルがない）の場合はエラーとせず続行
-            if (error.status === 404) {
-                console.log("ファイルが未作成のため新規作成します");
-            } else {
-                throw error; // 404以外はエラーとして処理
-            }
+            if (error.status !== 404) throw error;
         }
 
         // 3. GitHubへ作成または更新
@@ -63,10 +66,7 @@ app.post('/api/save', async (req, res) => {
             content: Buffer.from(JSON.stringify(req.body, null, 2)).toString('base64'),
         };
 
-        // SHAがあれば更新、なければ新規作成になる
-        if (fileSha) {
-            params.sha = fileSha;
-        }
+        if (fileSha) params.sha = fileSha;
 
         await octokit.rest.repos.createOrUpdateFileContents(params);
 
